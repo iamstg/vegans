@@ -43,12 +43,14 @@ class WGANGP(GAN):
                 else:
                     D_iters = critic_iters
 
+                # real 'data' will be OSM output
                 real = data.to(self.device)
                 batch_size = real.size(0)
 
                 """ Train the critic
                 """
                 self.optimizer_D.zero_grad()
+             	# fake data is ENet O/P, replace noise with ENet O/P 
                 noise = torch.randn(batch_size, self.nz, device=self.device)
                 fake = self.generator(noise).detach()
 
@@ -64,8 +66,12 @@ class WGANGP(GAN):
                     """ Train the generator every [Diters]
                     """
                     self.optimizer_G.zero_grad()
+                    # replace noise with ENet O/P
                     fake = self.generator(noise)
-                    loss_G = -torch.mean(self.discriminator(fake))
+                    # tune lambda_seg such that the two halfs are nearly equal
+                    print(-torch.mean(self.discriminator(fake)))
+                    print(supervised_seg_loss)
+                    loss_G = -torch.mean(self.discriminator(fake)) + (lambda_seg * supervised_seg_loss)
                     loss_G.backward()
                     self.optimizer_G.step()
                     gen_iters += 1
