@@ -149,21 +149,21 @@ class GAN(ABC):
         criterion = nn.CrossEntropyLoss(weight=self.class_weights)
 
         # Evaluation metric
-        ignore_index = list(class_encoding).index('unlabeled')
+        ignore_index = list(self.class_encoding).index('unlabeled')
         metric = IoU(num_classes, ignore_index=ignore_index)
 
         # Test the trained model on the test set
-        test = Inference(self.generator, self.test_loader, criterion, metric, self.device, self.count_save, generate_images = True, color_palette = self.class_encoding)
+        infer = Inference(self.generator, self.test_loader, criterion, metric, self.device, self.count_save, generate_images = True, color_palette = self.class_encoding)
 
         print(">>>> Running test dataset")
 
-        loss, (iou, miou) = test.run_epoch(iteration_loss = True)
-        class_iou = dict(zip(class_encoding.keys(), iou))
+        loss, (iou, miou) = infer.run_epoch(iteration_loss = True)
+        class_iou = dict(zip(self.class_encoding.keys(), iou))
 
         print(">>>> Avg. loss: {0:.4f} | Mean IoU: {1:.4f}".format(loss, miou))
 
         # Print per class IoU
-        for key, class_iou in zip(class_encoding.keys(), iou):
+        for key, class_iou in zip(self.class_encoding.keys(), iou):
             print("{0}: {1:.4f}".format(key, class_iou))
 
         # If the iou is best till now, save the model

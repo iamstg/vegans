@@ -46,7 +46,7 @@ device = torch.device(args.device)
 color_mean = [0., 0., 0.]
 color_std = [1., 1., 1.]
 
-ngpu = 1
+ngpu = 4
 
 
 def load_dataset(dataset):
@@ -172,7 +172,7 @@ def load_real_data(real_dataset):
 	return osm_loader
 
 
-class DiscriminativeNet(nn.Module):
+class DiscriminativeNet(torch.nn.Module):
     
     def __init__(self):
         super(DiscriminativeNet, self).__init__()
@@ -244,7 +244,7 @@ def main():
 	 	betas=(0.5, 0.999))
 
 	gan = WGANGP(generator, critic, dataloader, train_loader, test_loader, 
-		class_weights, class_encoding, ngpu=ngpu, device=device, nr_epochs=100, print_every=10, save_every = 100, optimizer_D=optimizer_D, optimizer_G=optimizer_G)
+		class_weights, class_encoding, ngpu=ngpu, device=device, nr_epochs=500, print_every=10, save_every = 400, optimizer_D=optimizer_D, optimizer_G=optimizer_G)
 
 	gan.train()
 	samples_l, D_losses, G_losses = gan.get_training_results()

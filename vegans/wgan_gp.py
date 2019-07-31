@@ -1,4 +1,5 @@
 import torch
+import torch.nn as nn
 from .gan import GAN
 
 
@@ -34,8 +35,10 @@ class WGANGP(GAN):
             return ((grads.norm(2, dim=1) - 1) ** 2).mean()
 
         gen_iters = 0  # the generator is not trained every iteration
+        criterion = nn.CrossEntropyLoss(weight=self.class_weights)
+
         for epoch in range(self.nr_epochs):
-            for minibatch_iter, (data, _) in enumerate(self.dataloader):
+            for minibatch_iter, (data, batch_data) in enumerate(zip(self.dataloader, self.train_loader)):
 
                 # the number of mini batches we'll train the critic before training the generator
                 if gen_iters < 25 or gen_iters % 500 == 0:
@@ -44,15 +47,21 @@ class WGANGP(GAN):
                     D_iters = critic_iters
 
                 # real 'data' will be OSM output
-                real = data.to(self.device)
+                real = data[0].to(self.device)
                 batch_size = real.size(0)
 
                 """ Train the critic
                 """
                 self.optimizer_D.zero_grad()
-             	# fake data is ENet O/P, replace noise with ENet O/P 
-                noise = torch.randn(batch_size, self.nz, device=self.device)
-                fake = self.generator(noise).detach()
+             	# fake data is ENet O/P, replace noise with ENet I/P
+                # noise = torch.randn(batch_size, self.nz, device=self.device)
+                # fake = self.generator(noise).detach()
+                # Get the inputs and labels
+                inputs = batch_data[0].to(self.device)
+                labels = batch_data[1].long().to(self.device)
+
+                # Forward propagation of Generator to generate output
+                fake = self.generator(inputs)
 
                 # Sign is inverse of paper because in paper it's a maximization problem
                 loss_D = self.discriminator(fake).mean() - self.discriminator(real).mean()
@@ -67,11 +76,14 @@ class WGANGP(GAN):
                     """
                     self.optimizer_G.zero_grad()
                     # replace noise with ENet O/P
-                    fake = self.generator(noise)
+                    fake = self.generator(inputs)
                     # tune lambda_seg such that the two halfs are nearly equal
-                    print(-torch.mean(self.discriminator(fake)))
+                    loss_discriminator = -torch.mean(self.discriminator(fake))
+                    lambda_seg = 1
+                    supervised_seg_loss = criterion(fake, labels)
+                    print(loss_discriminator)
                     print(supervised_seg_loss)
-                    loss_G = -torch.mean(self.discriminator(fake)) + (lambda_seg * supervised_seg_loss)
+                    loss_G = loss_discriminator + (lambda_seg * supervised_seg_loss)
                     loss_G.backward()
                     self.optimizer_G.step()
                     gen_iters += 1

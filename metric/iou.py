@@ -63,11 +63,18 @@ class IoU(metric.Metric):
 			"targets must be of dimension (N, H, W) or (N, K, H, W)"
 
 		# If the tensor is in categorical format convert it to integer format
+
+		# When the tensor is 4-dimensional, for each of the 3-dimensions of 
+		# class for each pixel, the value it contains is confidence of that
+		# class. We take the "index" (class label) with the maximum confidence 
+		# among the classes (i.e 3 dimensions)
+
 		if predicted.dim() == 4:
 			_, predicted = predicted.max(1)
 		if target.dim() == 4:
 			_, target = target.max(1)
 
+		# .view(-1) converts tensor to single dimensional tensor
 		self.conf_metric.add(predicted.view(-1), target.view(-1))
 
 	def value(self):

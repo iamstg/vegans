@@ -1,4 +1,6 @@
 from abc import ABC, abstractmethod
+from metric.iou import IoU
+from test import Test
 import torch
 import torch.optim as optim
 import torch.nn as nn
@@ -14,6 +16,10 @@ class GAN(ABC):
                  generator,
                  discriminator,
                  dataloader,
+                 train_loader,
+                 test_loader,
+                 class_weights,
+                 class_encoding,
                  optimizer_D=None,
                  optimizer_G=None,
                  nz=100,
@@ -21,7 +27,7 @@ class GAN(ABC):
                  ngpu=0,
                  fixed_noise_size=64,
                  nr_epochs=5,
-                 save_every=500,
+                 save_every=50,
                  print_every=50,
                  init_weights=False):
         """
@@ -47,9 +53,15 @@ class GAN(ABC):
         self.discriminator = self._init_nn(discriminator)
         self.nz = nz
         self.dataloader = dataloader
+        self.train_loader = train_loader
+        self.test_loader = test_loader
+        self.class_weights = class_weights
+        self.class_encoding = class_encoding
         self.nr_epochs = nr_epochs
         self.save_every = save_every
         self.print_every = print_every
+
+        self.best_iou = 0
 
         self.optimizer_D = optimizer_D if optimizer_D is not None else self._default_optimizers()[0]
         self.optimizer_G = optimizer_G if optimizer_G is not None else self._default_optimizers()[1]
@@ -116,6 +128,42 @@ class GAN(ABC):
         optimizer_G = optim.Adam(self.generator.parameters(), lr=0.0002, betas=(0.5, 0.999))
         return optimizer_D, optimizer_G
 
+
+    def test(self,):
+        """
+        Test the generator.
+        """
+        print("\nTesting...\n")
+
+        num_classes = len(self.class_encoding)
+
+        # We are going to use the CrossEntropyLoss loss function as it's most
+        # frequently used in classification problems with multiple classes
+        # which fits the problem. This criterion  combines LogSoftMax and 
+        # NLLLoss.
+        criterion = nn.CrossEntropyLoss(weight=self.class_weights)
+
+        # Evaluation metric
+        ignore_index = list(class_encoding).index('unlabeled')
+        metric = IoU(num_classes, ignore_index=ignore_index)
+
+        # Test the trained model on the test set
+        test = Test(self.generator, self.test_loader, criterion, metric, self.device)
+
+        print(">>>> Running test dataset")
+
+        loss, (iou, miou) = test.run_epoch(iteration_loss = True)
+        class_iou = dict(zip(class_encoding.keys(), iou))
+
+        print(">>>> Avg. loss: {0:.4f} | Mean IoU: {1:.4f}".format(loss, miou))
+
+        # Print per class IoU
+        for key, class_iou in zip(class_encoding.keys(), iou):
+            print("{0}: {1:.4f}".format(key, class_iou))
+
+        # If the iou is best till now, save 
+
+
     def _end_iteration(self, epoch, minibatch_iter, G_loss=None, D_loss=None, **kwargs):
         """
         Some boilerplate work done at each iteration (printing, saving, timing)
@@ -136,7 +184,8 @@ class GAN(ABC):
         if (self.global_iter % self.save_every == 0) or \
                 ((epoch == self.nr_epochs - 1) and (minibatch_iter == len(self.dataloader) - 1)):
             with torch.no_grad():
-                self.samples[(epoch, minibatch_iter)] = self.generator(self.fixed_noise).detach().cpu()
+                # self.samples[(epoch, minibatch_iter)] = self.generator(self.fixed_noise).detach().cpu()
+                self.test()
 
         # print every [self.print_every] iteration
         if self.nr_iters_since_last_print == self.print_every:
